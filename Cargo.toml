@@ -1,3 +1,11 @@
+[workspace]
+members = [
+    ".",
+    "examples/chart_zoo",
+    "examples/bi_dashboard",
+]
+resolver = "2"
+
 [package]
 name = "makepad-charts"
 version = "0.1.0"
@@ -9,7 +17,10 @@ keywords = ["charts", "visualization", "makepad", "gpu", "ui"]
 categories = ["visualization", "gui", "graphics"]
 
 [dependencies]
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", rev = "74d181563a4bbbbd54d1b9db92707cefca9d5096" }
+
+#[patch.crates-io]
+#makepad-widgets = { git = "https://github.com/makepad/makepad", rev = "74d181563a4bbbbd54d1b9db92707cefca9d5096" }
 
 [features]
 default = []

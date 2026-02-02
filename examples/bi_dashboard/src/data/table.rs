@@ -17,6 +17,7 @@ impl Value {
         }
     }
 
+    #[allow(dead_code)]
     /// Convert value to string representation
     pub fn as_string(&self) -> String {
         match self {
@@ -35,6 +36,7 @@ pub struct DataTable {
     pub data: Vec<Vec<Value>>,
 }
 
+#[allow(dead_code)]
 impl DataTable {
     /// Create a new empty data table
     pub fn new(name: String) -> Self {

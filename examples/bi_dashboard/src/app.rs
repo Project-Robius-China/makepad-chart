@@ -2,7 +2,8 @@ use crate::config::{ChartConfig, ChartType, DashboardConfig, GridPosition, save_
 use crate::data::{DataTable, parse_csv};
 use crate::transform::table_to_chart_data;
 use crate::ui::{self, AppScreen};
-use crate::ui::chart_cell::{ChartCellRef, ChartCellWidgetRefExt};
+use crate::ui::chart_cell::ChartCellWidgetRefExt;
+use crate::ui::data_table::DataTableWidgetRefExt;
 use makepad_widgets::*;
 use makepad_charts::*;
 live_design! {
@@ -11,6 +12,7 @@ live_design! {
     use link::widgets::*;
 
     use crate::ui::chart_cell::ChartCell;
+    use crate::ui::data_table::DataTable;
 
     COLOR_BG = #1a1a1a
     COLOR_PANEL = #2a2a2a
@@ -310,8 +312,8 @@ live_design! {
 
                             chart_type_dropdown = <DropDown> {
                                 width: 400, height: 30
-                                labels: ["Bar Chart", "Line Chart", "Pie Chart", "Scatter Plot", "Radar Chart", "Polar Area", "Bubble Chart", "Horizontal Bar", "Combo Chart", "Chord Diagram"]
-                                values: [Bar, Line, Pie, Scatter, Radar, PolarArea, Bubble, HorizontalBar, Combo, Chord]
+                                labels: ["Bar", "Line"]
+                                values: [Bar, Line]
                             }
 
                             <Label> {
@@ -362,7 +364,7 @@ live_design! {
                             }
 
                             <Label> {
-                                text: "X-Axis Column"
+                                text: "Data Columns"
                                 draw_text: {
                                     text_style: {font_size: 14.0},
                                     color: (COLOR_TEXT)
@@ -370,23 +372,8 @@ live_design! {
                                 padding: {top: 10}
                             }
 
-                            x_column_input = <TextInput> {
-                                width: 400, height: 30
-                                text: ""
-                            }
-
-                            <Label> {
-                                text: "Y-Axis Column(s) (comma separated)"
-                                draw_text: {
-                                    text_style: {font_size: 14.0},
-                                    color: (COLOR_TEXT)
-                                }
-                                padding: {top: 10}
-                            }
-
-                            y_columns_input = <TextInput> {
-                                width: 400, height: 30
-                                text: ""
+                            column_config_table = <DataTable> {
+                                width: Fill, height: Fit
                             }
 
                             config_status = <Label> {
@@ -423,6 +410,7 @@ pub struct App {
     current_dashboard: Option<DashboardConfig>,
 
     #[rust]
+    #[allow(dead_code)]
     current_dashboard_index: Option<usize>,
 
     #[rust]
@@ -437,6 +425,7 @@ impl LiveRegister for App {
         makepad_widgets::live_design(cx);
         makepad_charts::live_design(cx);
         ui::chart_cell::live_design(cx);
+        ui::data_table::live_design(cx);
     }
 }
 
@@ -505,14 +494,6 @@ impl MatchEvent for App {
             self.selected_chart_type = match selected {
                 0 => ChartType::Bar,
                 1 => ChartType::Line,
-                2 => ChartType::Pie,
-                3 => ChartType::Scatter,
-                4 => ChartType::Radar,
-                5 => ChartType::PolarArea,
-                6 => ChartType::Bubble,
-                7 => ChartType::HorizontalBar,
-                8 => ChartType::Combo,
-                9 => ChartType::Chord,
                 _ => ChartType::Bar,
             };
         }
@@ -529,6 +510,11 @@ impl MatchEvent for App {
             if let Some(pos) = &mut self.config_target_position {
                 pos.col = selected;
             }
+        }
+
+        // Handle DataTable Add Row button click
+        if self.ui.data_table(ids!(column_config_table)).add_row_clicked(actions) {
+            self.ui.data_table(ids!(column_config_table)).add_row(cx);
         }
     }
 }
@@ -592,7 +578,7 @@ impl App {
         }
     }
 
-    fn load_dashboard_list(&mut self, cx: &mut Cx) {
+    fn load_dashboard_list(&mut self, _cx: &mut Cx) {
         match load_all_dashboards() {
             Ok(dashboards) => {
                 self.dashboards = dashboards;
@@ -674,28 +660,26 @@ impl App {
     }
 
     fn setup_chart_config(&mut self, cx: &mut Cx) {
+        // Clear the DataTable first
+        self.ui.data_table(ids!(column_config_table)).clear(cx);
+
         if let Some(table) = self.data_tables.first() {
             let data_source_text = format!("{} ({} columns)", table.name, table.column_count());
             self.ui
                 .label(ids!(data_source_label))
                 .set_text(cx, &data_source_text);
 
-            // Pre-fill with first column suggestions
-            if !table.columns.is_empty() {
-                self.ui
-                    .text_input(ids!(x_column_input))
-                    .set_text(cx, &table.columns[0]);
+            // Set column names on the DataTable
+            self.ui
+                .data_table(ids!(column_config_table))
+                .set_column_names(cx, table.columns.clone());
 
-                if table.columns.len() > 1 {
-                    self.ui
-                        .text_input(ids!(y_columns_input))
-                        .set_text(cx, &table.columns[1]);
-                }
-            }
+            // Add an initial row
+            self.ui.data_table(ids!(column_config_table)).add_row(cx);
         }
 
         // Set initial position in dropdowns
-        if let Some(pos) = self.config_target_position {
+        if let Some(_pos) = self.config_target_position {
             self.ui.drop_down(ids!(row_dropdown)).set_selected_item(cx, 1);
             self.ui.drop_down(ids!(column_dropdown)).set_selected_item(cx, 1);
         }
@@ -706,14 +690,30 @@ impl App {
 
     fn apply_chart_config(&mut self, cx: &mut Cx) {
         let title = self.ui.text_input(ids!(chart_title_input)).text();
-        let x_column = self.ui.text_input(ids!(x_column_input)).text();
-        let y_columns_text = self.ui.text_input(ids!(y_columns_input)).text();
 
-        let y_columns: Vec<String> = y_columns_text
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        // Get rows from the DataTable
+        let rows = self.ui.data_table(ids!(column_config_table)).get_rows();
+        let column_names = self.ui.data_table(ids!(column_config_table)).get_column_names();
+
+        if rows.is_empty() {
+            self.ui.label(ids!(config_status)).set_text(cx, "Please add at least one column");
+            return;
+        }
+
+        // First row is X-axis, remaining rows are Y-axis columns
+        let x_column = column_names.get(rows[0].column_index)
+            .cloned()
+            .unwrap_or_default();
+
+        let y_columns: Vec<String> = rows.iter()
+            .skip(1)
+            .filter_map(|row| column_names.get(row.column_index).cloned())
             .collect();
+
+        if y_columns.is_empty() {
+            self.ui.label(ids!(config_status)).set_text(cx, "Please add at least one Y-axis column");
+            return;
+        }
 
         if let (Some(table), Some(dashboard), Some(position)) = (
             self.data_tables.first(),
@@ -752,7 +752,7 @@ impl App {
         None
     }
 
-    fn save_current_dashboard(&mut self, cx: &mut Cx) {
+    fn save_current_dashboard(&mut self, _cx: &mut Cx) {
         if let Some(dashboard) = &self.current_dashboard {
             match save_dashboard(dashboard) {
                 Ok(_) => {

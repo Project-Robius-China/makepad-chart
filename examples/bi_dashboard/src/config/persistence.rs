@@ -22,6 +22,7 @@ pub fn save_dashboard(dashboard: &DashboardConfig) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 /// Load a dashboard configuration from a JSON file
 pub fn load_dashboard(id: &str) -> Result<DashboardConfig, String> {
     let filename = format!("{}/{}.json", DASHBOARDS_DIR, id);
@@ -70,6 +71,7 @@ pub fn load_all_dashboards() -> Result<Vec<DashboardConfig>, String> {
     Ok(dashboards)
 }
 
+#[allow(dead_code)]
 /// Delete a dashboard configuration file
 pub fn delete_dashboard(id: &str) -> Result<(), String> {
     let filename = format!("{}/{}.json", DASHBOARDS_DIR, id);

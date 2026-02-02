@@ -1,52 +1,29 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Types of charts available
+/// Types of charts available (matching ComboChart's DatasetType)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ChartType {
     #[default]
     Bar,
     Line,
-    Pie,
-    Scatter,
-    Radar,
-    PolarArea,
-    Bubble,
-    HorizontalBar,
-    Combo,
-    Chord,
 }
 
+#[allow(dead_code)]
 impl ChartType {
     /// Get all available chart types
     pub fn all() -> Vec<ChartType> {
         vec![
             ChartType::Bar,
             ChartType::Line,
-            ChartType::Pie,
-            ChartType::Scatter,
-            ChartType::Radar,
-            ChartType::PolarArea,
-            ChartType::Bubble,
-            ChartType::HorizontalBar,
-            ChartType::Combo,
-            ChartType::Chord,
         ]
     }
 
     /// Get display name for chart type
     pub fn display_name(&self) -> &str {
         match self {
-            ChartType::Bar => "Bar Chart",
-            ChartType::Line => "Line Chart",
-            ChartType::Pie => "Pie Chart",
-            ChartType::Scatter => "Scatter Plot",
-            ChartType::Radar => "Radar Chart",
-            ChartType::PolarArea => "Polar Area",
-            ChartType::Bubble => "Bubble Chart",
-            ChartType::HorizontalBar => "Horizontal Bar",
-            ChartType::Combo => "Combo Chart",
-            ChartType::Chord => "Chord Diagram",
+            ChartType::Bar => "Bar",
+            ChartType::Line => "Line",
         }
     }
 }
@@ -121,16 +98,19 @@ impl DashboardConfig {
         self.charts.push(chart);
     }
 
+    #[allow(dead_code)]
     /// Remove a chart by ID
     pub fn remove_chart(&mut self, chart_id: &str) {
         self.charts.retain(|c| c.id != chart_id);
     }
 
+    #[allow(dead_code)]
     /// Get a chart by ID
     pub fn get_chart(&self, chart_id: &str) -> Option<&ChartConfig> {
         self.charts.iter().find(|c| c.id == chart_id)
     }
 
+    #[allow(dead_code)]
     /// Get a mutable reference to a chart by ID
     pub fn get_chart_mut(&mut self, chart_id: &str) -> Option<&mut ChartConfig> {
         self.charts.iter_mut().find(|c| c.id == chart_id)

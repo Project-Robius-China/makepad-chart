@@ -1,9 +1,10 @@
 use makepad_widgets::*;
-
+use makepad_components::color_picker::*;
 live_design! {
     use link::theme::*;
     use link::shaders::*;
     use link::widgets::*;
+    use makepad_components::color_picker::color_picker::*;
 
     COLOR_PANEL = #2a2a2a
     COLOR_BORDER = #3a3a3a
@@ -12,6 +13,11 @@ live_design! {
     COLOR_HOVER = #5aa0f2
     COLOR_HEADER = #333333
     COLOR_ROW_BG = #252525
+
+    // Color swatch button for data table
+    ColorSwatchBtn = <MpColorPicker> {
+        
+    }
 
     pub DataTableRow = <View> {
         width: Fill, height: Fit
@@ -26,15 +32,23 @@ live_design! {
         }
 
         column_dropdown = <DropDown> {
-            width: 200, height: 30
+            width: 180, height: 30
             labels: []
             values: []
         }
 
         body_input = <TextInput> {
-            width: Fill, height: 30
+            width: 120, height: 30
             text: ""
         }
+
+        chart_type_dropdown = <DropDown> {
+            width: 80, height: 30
+            labels: ["Bar", "Line"]
+            values: [Bar, Line]
+        }
+
+        color_btn = <ColorSwatchBtn> {}
     }
 
     pub DataTable = {{DataTable}} {
@@ -63,7 +77,7 @@ live_design! {
             }
 
             <Label> {
-                width: 200
+                width: 180
                 text: "Column"
                 draw_text: {
                     text_style: {font_size: 14.0},
@@ -72,8 +86,26 @@ live_design! {
             }
 
             <Label> {
-                width: Fill
-                text: "Body"
+                width: 120
+                text: "Label"
+                draw_text: {
+                    text_style: {font_size: 14.0},
+                    color: (COLOR_TEXT)
+                }
+            }
+
+            <Label> {
+                width: 80
+                text: "Type"
+                draw_text: {
+                    text_style: {font_size: 14.0},
+                    color: (COLOR_TEXT)
+                }
+            }
+
+            <Label> {
+                width: 30
+                text: "Color"
                 draw_text: {
                     text_style: {font_size: 14.0},
                     color: (COLOR_TEXT)
@@ -81,9 +113,9 @@ live_design! {
             }
         }
 
-        // Rows will be rendered via PortalList
+        // Rows using PortalList
         rows_list = <PortalList> {
-            width: Fill, height: Fit
+            width: Fill, height: 200
             flow: Down
             spacing: 5
 
@@ -111,10 +143,31 @@ live_design! {
 }
 
 /// Represents a row's data
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TableRowData {
     pub column_index: usize,
     pub body: String,
+    /// 0 = Bar, 1 = Line
+    pub chart_type: usize,
+    /// Color for the bar/line
+    pub color: Vec4,
+}
+
+impl Default for TableRowData {
+    fn default() -> Self {
+        Self {
+            column_index: 0,
+            body: String::new(),
+            chart_type: 0,
+            color: vec4(0.29, 0.56, 0.89, 1.0), // Default blue #4a90e2
+        }
+    }
+}
+
+#[derive(Clone, Debug, DefaultNone)]
+pub enum DataTableAction {
+    ColorButtonClicked(usize), // Row index
+    None,
 }
 
 /// A table widget with column dropdown and body columns
@@ -133,28 +186,10 @@ pub struct DataTable {
 impl Widget for DataTable {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-
-        // Handle PortalList events for rows
-        let actions = cx.capture_actions(|cx| {
-            self.portal_list(ids!(rows_list)).handle_event(cx, event, scope);
-        });
-
-        // Sync changes back to our data
-        for (row_idx, item) in self.portal_list(ids!(rows_list)).items_with_actions(&actions) {
-            if let Some(selected) = item.drop_down(ids!(column_dropdown)).selected(&actions) {
-                if row_idx < self.rows.len() {
-                    self.rows[row_idx].column_index = selected;
-                }
-            }
-            let body = item.text_input(ids!(body_input)).text();
-            if row_idx < self.rows.len() {
-                self.rows[row_idx].body = body;
-            }
-        }
+        self.widget_match_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // Draw the main view structure
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
                 list.set_item_range(cx, 0, self.rows.len());
@@ -168,12 +203,72 @@ impl Widget for DataTable {
                         item.drop_down(ids!(column_dropdown)).set_selected_item(cx, row_data.column_index);
 
                         item.text_input(ids!(body_input)).set_text(cx, &row_data.body);
+
+                        // Set chart type dropdown (Bar=0, Line=1)
+                        item.drop_down(ids!(chart_type_dropdown)).set_selected_item(cx, row_data.chart_type);
+
+                        // Set color button color
+                        item.button(ids!(color_btn)).apply_over(cx, live! {
+                            draw_bg: { color: (row_data.color) }
+                        });
+
                         item.draw_all(cx, scope);
                     }
                 }
             }
         }
         DrawStep::done()
+    }
+}
+
+impl WidgetMatchEvent for DataTable {
+    fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions, scope: &mut Scope) {
+        let list_widget = self.view.portal_list(ids!(rows_list));
+
+        for (row_idx, item_widget) in list_widget.items_with_actions(actions) {
+            if row_idx >= self.rows.len() {
+                continue;
+            }
+
+            let column_dropdown = item_widget.drop_down(ids!(column_dropdown));
+            let body_input = item_widget.text_input(ids!(body_input));
+            let chart_type_dropdown = item_widget.drop_down(ids!(chart_type_dropdown));
+            let color_btn = item_widget.button(ids!(color_btn));
+
+            // Check column dropdown changes
+            if let Some(selected) = column_dropdown.changed(actions) {
+                self.rows[row_idx].column_index = selected;
+                cx.redraw_all();
+            }
+
+            // Check body text input changes
+            if let Some(text) = body_input.changed(actions) {
+                self.rows[row_idx].body = text;
+                cx.redraw_all();
+            }
+
+            // Check chart type dropdown changes
+            if let Some(selected) = chart_type_dropdown.changed(actions) {
+                self.rows[row_idx].chart_type = selected;
+                cx.redraw_all();
+            }
+
+            // Check color picker changes
+            let color_picker = item_widget.mp_color_picker(ids!(color_btn));
+            if let Some(hsv) = color_picker.changed(actions) {
+                self.rows[row_idx].color = hsv.to_vec4();
+                cx.redraw_all();
+            }
+
+            // Check color button click
+            if color_btn.clicked(actions) {
+                cx.widget_action(
+                    self.widget_uid(),
+                    &scope.path,
+                    DataTableAction::ColorButtonClicked(row_idx),
+                );
+            }
+        }
     }
 }
 
@@ -190,8 +285,15 @@ impl DataTable {
     }
 
     /// Add a row with data
-    pub fn add_row_with_data(&mut self, column_index: usize, body: String) {
-        self.rows.push(TableRowData { column_index, body });
+    pub fn add_row_with_data(&mut self, column_index: usize, body: String, chart_type: usize) {
+        self.rows.push(TableRowData { column_index, body, chart_type, ..Default::default() });
+    }
+
+    /// Set row color
+    pub fn set_row_color(&mut self, row_idx: usize, color: Vec4) {
+        if row_idx < self.rows.len() {
+            self.rows[row_idx].color = color;
+        }
     }
 
     /// Get the number of rows
@@ -234,9 +336,9 @@ impl DataTableRef {
     }
 
     /// Add a row with data and redraw
-    pub fn add_row_with_data(&self, cx: &mut Cx, column_index: usize, body: String) {
+    pub fn add_row_with_data(&self, cx: &mut Cx, column_index: usize, body: String, chart_type: usize) {
         if let Some(mut inner) = self.borrow_mut() {
-            inner.add_row_with_data(column_index, body);
+            inner.add_row_with_data(column_index, body, chart_type);
             inner.redraw(cx);
         }
     }
@@ -282,6 +384,24 @@ impl DataTableRef {
             inner.button(ids!(add_row_btn)).clicked(actions)
         } else {
             false
+        }
+    }
+
+    /// Check if a color button was clicked, returns the row index
+    pub fn color_btn_clicked(&self, actions: &Actions) -> Option<usize> {
+        if let Some(item) = actions.find_widget_action(self.widget_uid()) {
+            if let DataTableAction::ColorButtonClicked(row_idx) = item.cast() {
+                return Some(row_idx);
+            }
+        }
+        None
+    }
+
+    /// Set row color and redraw
+    pub fn set_row_color(&self, cx: &mut Cx, row_idx: usize, color: Vec4) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.set_row_color(row_idx, color);
+            inner.redraw(cx);
         }
     }
 }

@@ -23,7 +23,7 @@ pub use core::{
 pub use scale::{Scale, Tick, LinearScale, CategoryScale};
 pub use coord::{CartesianCoord, PolarCoord, ChartArea, ScaleType};
 pub use element::{DrawBar, DrawChartLine, DrawPoint, DrawArc, PointStyle};
-pub use component::{ChartAxis, ChartGrid, ChartLegend, ChartTooltip, ChartTitle};
+pub use component::{ChartAxis, ChartGrid, ChartLegend, ChartTitle, ChartCalloutTooltip, ChartTooltipOptions, TooltipPosition, MpColorPicker, MpHueSlider, MpSVPicker, MpColorSwatch, MpPresetColor, Hsv};
 pub use chart::{BarChart, LineChart, PieChart, ScatterChart};
 pub use animation::{ChartAnimator, AnimationManager, apply_easing, interpolate};
 pub use interaction::{HitTester, HitRegion, HitData};

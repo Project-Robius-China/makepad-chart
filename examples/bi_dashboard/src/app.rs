@@ -1,11 +1,12 @@
-use crate::config::{ChartConfig, ChartType, DashboardConfig, GridPosition, save_dashboard, load_all_dashboards};
+use crate::config::{ChartConfig, ChartType, DashboardConfig, GridPosition, YColumnConfig, save_dashboard, load_all_dashboards};
 use crate::data::{DataTable, parse_csv};
-use crate::transform::table_to_chart_data;
+use crate::transform::table_to_combo_chart_data;
 use crate::ui::{self, AppScreen};
 use crate::ui::chart_cell::ChartCellWidgetRefExt;
 use crate::ui::data_table::DataTableWidgetRefExt;
 use makepad_widgets::*;
 use makepad_charts::*;
+use makepad_charts::chart::combo_chart::DatasetType;
 live_design! {
     use link::theme::*;
     use link::shaders::*;
@@ -101,12 +102,73 @@ live_design! {
                             padding: {bottom: 10}
                         }
 
-                        dashboard_list = <ScrollYView> {
-                            width: Fill, height: Fill
-                            <View> {
-                                width: Fill, height: Fit
-                                flow: Down
-                                spacing: 10
+                        dashboard_list = <View> {
+                            width: Fill, height: Fit
+                            flow: Down
+                            spacing: 10
+
+                            dashboard_btn_0 = <Button> {
+                                visible: false
+                                width: Fill, height: 50
+                                draw_bg: {
+                                    fn pixel(self) -> vec4 {
+                                        return mix((COLOR_PANEL), (COLOR_HOVER), self.hover);
+                                    }
+                                }
+                                draw_text: {
+                                    text_style: {font_size: 14.0},
+                                    color: (COLOR_TEXT)
+                                }
+                            }
+
+                            dashboard_btn_1 = <Button> {
+                                visible: false
+                                width: Fill, height: 50
+                                draw_bg: {
+                                    fn pixel(self) -> vec4 {
+                                        return mix((COLOR_PANEL), (COLOR_HOVER), self.hover);
+                                    }
+                                }
+                                draw_text: {
+                                    text_style: {font_size: 14.0},
+                                    color: (COLOR_TEXT)
+                                }
+                            }
+
+                            dashboard_btn_2 = <Button> {
+                                visible: false
+                                width: Fill, height: 50
+                                draw_bg: {
+                                    fn pixel(self) -> vec4 {
+                                        return mix((COLOR_PANEL), (COLOR_HOVER), self.hover);
+                                    }
+                                }
+                                draw_text: {
+                                    text_style: {font_size: 14.0},
+                                    color: (COLOR_TEXT)
+                                }
+                            }
+
+                            dashboard_btn_3 = <Button> {
+                                visible: false
+                                width: Fill, height: 50
+                                draw_bg: {
+                                    fn pixel(self) -> vec4 {
+                                        return mix((COLOR_PANEL), (COLOR_HOVER), self.hover);
+                                    }
+                                }
+                                draw_text: {
+                                    text_style: {font_size: 14.0},
+                                    color: (COLOR_TEXT)
+                                }
+                            }
+                        }
+
+                        no_dashboards_label = <Label> {
+                            text: "No saved dashboards. Create a new one or import CSV data first."
+                            draw_text: {
+                                text_style: {font_size: 12.0},
+                                color: #888
                             }
                         }
                     }
@@ -217,32 +279,37 @@ live_design! {
                             padding: {bottom: 10}
                         }
 
-                        // 2x2 Chart Grid
-                        chart_grid = <View> {
+                        // Scrollable Chart Grid - Flow Right
+                        <ScrollXYView> {
                             width: Fill, height: Fill
-                            flow: Down
-                            spacing: 20
 
-                            // Row 1
-                            <View> {
-                                width: Fill, height: Fill
+                            chart_grid = <View> {
+                                width: Fit, height: Fill
                                 flow: Right
                                 spacing: 20
+                                padding: 10
 
-                                chart_0_0 = <ChartCell> {}
+                                chart_0_0 = <ChartCell> {
+                                    width: 400, height: Fill
+                                }
 
-                                chart_0_1 = <ChartCell> {}
-                            }
+                                chart_0_1 = <ChartCell> {
+                                    width: 400, height: Fill
+                                }
 
-                            // Row 2
-                            <View> {
-                                width: Fill, height: Fill
-                                flow: Right
-                                spacing: 20
-
-                                chart_1_0 = <ChartCell> {}
-
-                                chart_1_1 = <ChartCell> {}
+                                // Add Chart button at the end
+                                add_chart_inline_btn = <Button> {
+                                    width: 100, height: Fill
+                                    text: "+"
+                                    draw_text: {
+                                        text_style: {font_size: 32.0}
+                                    }
+                                    draw_bg: {
+                                        fn pixel(self) -> vec4 {
+                                            return mix((COLOR_PANEL), (COLOR_HOVER), self.hover);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -273,98 +340,38 @@ live_design! {
                                 }
                             }
                         }
-
-                        <Label> {
-                            text: "Configure Chart"
-                            draw_text: {
-                                text_style: {font_size: 18.0},
-                                color: (COLOR_TEXT)
-                            }
-                            padding: {bottom: 20}
-                        }
-
                         <View> {
                             width: Fill, height: Fit
                             flow: Down
                             spacing: 15
+                            padding: {bottom: 20}
 
                             <Label> {
-                                text: "Chart Title"
+                                text: "Configure Chart"
                                 draw_text: {
-                                    text_style: {font_size: 14.0},
+                                    text_style: {font_size: 18.0},
                                     color: (COLOR_TEXT)
                                 }
+                                padding: {bottom: 10}
                             }
-
-                            chart_title_input = <TextInput> {
-                                width: 400, height: 30
-                                text: "My Chart"
-                            }
-
-                            <Label> {
-                                text: "Chart Type"
-                                draw_text: {
-                                    text_style: {font_size: 14.0},
-                                    color: (COLOR_TEXT)
+                            <View> {
+                                flow: Right
+                                <Label> {
+                                    text: "Chart Title"
+                                    draw_text: {
+                                        text_style: {font_size: 14.0},
+                                        color: (COLOR_TEXT)
+                                    }
                                 }
-                                padding: {top: 10}
-                            }
 
-                            chart_type_dropdown = <DropDown> {
-                                width: 400, height: 30
-                                labels: ["Bar", "Line"]
-                                values: [Bar, Line]
-                            }
-
-                            <Label> {
-                                text: "Grid Position - Row"
-                                draw_text: {
-                                    text_style: {font_size: 14.0},
-                                    color: (COLOR_TEXT)
-                                }
-                                padding: {top: 10}
-                            }
-
-                            row_dropdown = <DropDown> {
-                                width: 400, height: 30
-                                labels: ["Row 0 (Top)", "Row 1 (Bottom)"]
-                                values: [0, 1]
-                            }
-
-                            <Label> {
-                                text: "Grid Position - Column"
-                                draw_text: {
-                                    text_style: {font_size: 14.0},
-                                    color: (COLOR_TEXT)
-                                }
-                                padding: {top: 10}
-                            }
-
-                            column_dropdown = <DropDown> {
-                                width: 400, height: 30
-                                labels: ["Column 0 (Left)", "Column 1 (Right)"]
-                                values: [0, 1]
-                            }
-
-                            <Label> {
-                                text: "Data Source"
-                                draw_text: {
-                                    text_style: {font_size: 14.0},
-                                    color: (COLOR_TEXT)
-                                }
-                                padding: {top: 10}
-                            }
-
-                            data_source_label = <Label> {
-                                text: "No data loaded"
-                                draw_text: {
-                                    text_style: {font_size: 12.0},
-                                    color: #888
+                                chart_title_input = <TextInput> {
+                                    width: 400, height: 30
+                                    text: "My Chart"
                                 }
                             }
 
                             <Label> {
-                                text: "Data Columns"
+                                text: "Data Columns (1st row = X-axis, additional rows = Y-axis)"
                                 draw_text: {
                                     text_style: {font_size: 14.0},
                                     color: (COLOR_TEXT)
@@ -383,6 +390,90 @@ live_design! {
                                     color: #ff6666
                                 }
                                 padding: {top: 10}
+                            }
+                        }
+                    }
+
+                    // Right Drawer for chart quick actions
+                    chart_drawer = <View> {
+                        visible: false
+                        width: Fill, height: Fill
+                        flow: Overlay
+
+                        // Semi-transparent backdrop
+                        drawer_backdrop = <View> {
+                            width: Fill, height: Fill
+                            show_bg: true
+                            draw_bg: {
+                                fn pixel(self) -> vec4 {
+                                    return vec4(0.0, 0.0, 0.0, 0.5);
+                                }
+                            }
+                        }
+
+                        // Drawer panel on the right
+                        <View> {
+                            width: Fill, height: Fill
+                            flow: Right
+                            align: { x: 1.0 }
+
+                            drawer_panel = <View> {
+                                width: 280, height: Fill
+                                flow: Down
+                                padding: 20
+                                spacing: 10
+                                show_bg: true
+                                draw_bg: {
+                                    fn pixel(self) -> vec4 {
+                                        return (COLOR_PANEL);
+                                    }
+                                }
+
+                                <Label> {
+                                    text: "Chart Options"
+                                    draw_text: {
+                                        text_style: {font_size: 16.0},
+                                        color: (COLOR_TEXT)
+                                    }
+                                    padding: {bottom: 10}
+                                }
+
+                                drawer_configure_btn = <Button> {
+                                    width: Fill, height: 40
+                                    text: "Configure Chart"
+                                    draw_bg: {
+                                        fn pixel(self) -> vec4 {
+                                            return mix((COLOR_PRIMARY), (COLOR_HOVER), self.hover);
+                                        }
+                                    }
+                                }
+
+                                drawer_move_left_btn = <Button> {
+                                    width: Fill, height: 40
+                                    text: "Move Left"
+                                }
+
+                                drawer_move_right_btn = <Button> {
+                                    width: Fill, height: 40
+                                    text: "Move Right"
+                                }
+
+                                drawer_delete_btn = <Button> {
+                                    width: Fill, height: 40
+                                    text: "Delete Chart"
+                                    draw_bg: {
+                                        fn pixel(self) -> vec4 {
+                                            return mix(#cc4444, #ff6666, self.hover);
+                                        }
+                                    }
+                                }
+
+                                <View> { width: Fill, height: Fill }
+
+                                drawer_close_btn = <Button> {
+                                    width: Fill, height: 40
+                                    text: "Close"
+                                }
                             }
                         }
                     }
@@ -416,14 +507,17 @@ pub struct App {
     #[rust]
     config_target_position: Option<GridPosition>,
 
+    /// Index of the chart selected for drawer actions (0-3 for chart_0_0 to chart_1_1)
     #[rust]
-    selected_chart_type: ChartType,
+    drawer_selected_chart: Option<usize>,
 }
 
 impl LiveRegister for App {
     fn live_register(cx: &mut Cx) {
         makepad_widgets::live_design(cx);
+        makepad_components::live_design(cx);
         makepad_charts::live_design(cx);
+        
         ui::chart_cell::live_design(cx);
         ui::data_table::live_design(cx);
     }
@@ -449,6 +543,25 @@ impl MatchEvent for App {
             self.navigate_to(cx, AppScreen::Import);
         }
 
+        // Dashboard list item clicks
+        let dashboard_btn_ids = [
+            ids!(dashboard_btn_0),
+            ids!(dashboard_btn_1),
+            ids!(dashboard_btn_2),
+            ids!(dashboard_btn_3),
+        ];
+
+        for (i, btn_id) in dashboard_btn_ids.iter().enumerate() {
+            if self.ui.button(*btn_id).clicked(actions) {
+                if i < self.dashboards.len() {
+                    self.current_dashboard = Some(self.dashboards[i].clone());
+                    self.current_dashboard_index = Some(i);
+                    self.navigate_to(cx, AppScreen::Dashboard);
+                }
+                break;
+            }
+        }
+
         // Import screen actions
         if self.ui.button(ids!(back_from_import_btn)).clicked(actions) {
             self.navigate_to(cx, AppScreen::Home);
@@ -463,7 +576,8 @@ impl MatchEvent for App {
             self.navigate_to(cx, AppScreen::Home);
         }
 
-        if self.ui.button(ids!(add_chart_btn)).clicked(actions) {
+        if self.ui.button(ids!(add_chart_btn)).clicked(actions)
+            || self.ui.button(ids!(add_chart_inline_btn)).clicked(actions) {
             if self.data_tables.is_empty() {
                 self.ui.label(ids!(config_status))
                     .set_text(cx, "Please import CSV data first");
@@ -489,32 +603,66 @@ impl MatchEvent for App {
             self.apply_chart_config(cx);
         }
 
-        // Handle chart type dropdown changes
-        if let Some(selected) = self.ui.drop_down(ids!(chart_type_dropdown)).selected(actions) {
-            self.selected_chart_type = match selected {
-                0 => ChartType::Bar,
-                1 => ChartType::Line,
-                _ => ChartType::Bar,
-            };
-        }
-
-        // Handle row dropdown changes
-        if let Some(selected) = self.ui.drop_down(ids!(row_dropdown)).selected(actions) {
-            if let Some(pos) = &mut self.config_target_position {
-                pos.row = selected;
-            }
-        }
-
-        // Handle column dropdown changes
-        if let Some(selected) = self.ui.drop_down(ids!(column_dropdown)).selected(actions) {
-            if let Some(pos) = &mut self.config_target_position {
-                pos.col = selected;
-            }
-        }
-
         // Handle DataTable Add Row button click
         if self.ui.data_table(ids!(column_config_table)).add_row_clicked(actions) {
             self.ui.data_table(ids!(column_config_table)).add_row(cx);
+        }
+
+        // Handle settings button click on chart cells
+        let chart_ids = [
+            ids!(chart_0_0),
+        ];
+
+        for (idx, id) in chart_ids.iter().enumerate() {
+            if self.ui.chart_cell(*id).settings_clicked(actions) {
+                self.drawer_selected_chart = Some(idx);
+                self.ui.view(ids!(chart_drawer)).set_visible(cx, true);
+                self.ui.redraw(cx);
+                break;
+            }
+        }
+
+        // Drawer close button or backdrop click
+        if self.ui.button(ids!(drawer_close_btn)).clicked(actions) {
+            self.close_drawer(cx);
+        }
+
+        // Drawer configure button
+        if self.ui.button(ids!(drawer_configure_btn)).clicked(actions) {
+            if let Some(idx) = self.drawer_selected_chart {
+                let pos = GridPosition { row: idx / 2, col: idx % 2 };
+                self.config_target_position = Some(pos);
+                self.close_drawer(cx);
+                self.navigate_to(cx, AppScreen::ChartConfig);
+            }
+        }
+
+        // Drawer move left button
+        if self.ui.button(ids!(drawer_move_left_btn)).clicked(actions) {
+            if let Some(idx) = self.drawer_selected_chart {
+                if idx > 0 {
+                    self.swap_charts(cx, idx, idx - 1);
+                    self.drawer_selected_chart = Some(idx - 1);
+                }
+            }
+        }
+
+        // Drawer move right button
+        if self.ui.button(ids!(drawer_move_right_btn)).clicked(actions) {
+            if let Some(idx) = self.drawer_selected_chart {
+                if idx < 3 {
+                    self.swap_charts(cx, idx, idx + 1);
+                    self.drawer_selected_chart = Some(idx + 1);
+                }
+            }
+        }
+
+        // Drawer delete button
+        if self.ui.button(ids!(drawer_delete_btn)).clicked(actions) {
+            if let Some(idx) = self.drawer_selected_chart {
+                self.delete_chart(cx, idx);
+                self.close_drawer(cx);
+            }
         }
     }
 }
@@ -578,19 +726,42 @@ impl App {
         }
     }
 
-    fn load_dashboard_list(&mut self, _cx: &mut Cx) {
+    fn load_dashboard_list(&mut self, cx: &mut Cx) {
         match load_all_dashboards() {
             Ok(dashboards) => {
                 self.dashboards = dashboards;
             }
             Err(e) => {
                 eprintln!("Failed to load dashboards: {}", e);
+                self.dashboards = Vec::new();
+            }
+        }
+
+        // Show/hide the "no dashboards" label
+        self.ui.label(ids!(no_dashboards_label)).set_visible(cx, self.dashboards.is_empty());
+
+        // Update dashboard buttons
+        let btn_ids = [
+            ids!(dashboard_btn_0),
+            ids!(dashboard_btn_1),
+            ids!(dashboard_btn_2),
+            ids!(dashboard_btn_3),
+        ];
+
+        for (i, btn_id) in btn_ids.iter().enumerate() {
+            let btn = self.ui.button(*btn_id);
+            if i < self.dashboards.len() {
+                btn.set_text(cx, &self.dashboards[i].name);
+                btn.set_visible(cx, true);
+            } else {
+                btn.set_visible(cx, false);
             }
         }
     }
 
     fn render_dashboard(&mut self, cx: &mut Cx) {
         if let Some(dashboard) = self.current_dashboard.clone() {
+            println!("render_dashboard: {} charts", dashboard.charts.len());
             self.ui
                 .label(ids!(dashboard_name))
                 .set_text(cx, &dashboard.name);
@@ -604,6 +775,7 @@ impl App {
 
             // Render each configured chart
             for chart_config in &dashboard.charts {
+                println!("render_dashboard: rendering chart at ({},{})", chart_config.position.row, chart_config.position.col);
                 self.render_chart(cx, chart_config);
             }
         }
@@ -615,9 +787,6 @@ impl App {
         // Use ChartCell's show_empty method to hide all charts and show empty label
         match (row, col) {
             (0, 0) => self.ui.chart_cell(ids!(chart_0_0)).show_empty(cx),
-            (0, 1) => self.ui.chart_cell(ids!(chart_0_1)).show_empty(cx),
-            (1, 0) => self.ui.chart_cell(ids!(chart_1_0)).show_empty(cx),
-            (1, 1) => self.ui.chart_cell(ids!(chart_1_1)).show_empty(cx),
             _ => {}
         }
     }
@@ -633,7 +802,7 @@ impl App {
         };
 
         // Convert to chart data
-        let chart_data = match table_to_chart_data(table, &config.x_column, &config.y_columns) {
+        let chart_data = match table_to_combo_chart_data(table, &config.x_column, &config.y_columns) {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("Failed to convert table to chart data: {}", e);
@@ -641,20 +810,25 @@ impl App {
             }
         };
 
+        // Extract chart types from y_columns
+        let chart_types: Vec<DatasetType> = config.y_columns.iter().map(|y| {
+            match y.chart_type {
+                ChartType::Bar => DatasetType::Bar,
+                ChartType::Line => DatasetType::Line,
+            }
+        }).collect();
+
         // Create chart options
         let options = ChartOptions::new()
             .with_title(&config.title)
             .with_animation_duration(500.0);
 
-        // Use ChartCell's set_data_options method to display the correct chart type
+        // Use ChartCell's set_combo_data_options method to display per-column chart types
         let row = config.position.row;
         let col = config.position.col;
 
         match (row, col) {
-            (0, 0) => self.ui.chart_cell(ids!(chart_0_0)).set_data_options(cx, config.chart_type, chart_data, options),
-            (0, 1) => self.ui.chart_cell(ids!(chart_0_1)).set_data_options(cx, config.chart_type, chart_data, options),
-            (1, 0) => self.ui.chart_cell(ids!(chart_1_0)).set_data_options(cx, config.chart_type, chart_data, options),
-            (1, 1) => self.ui.chart_cell(ids!(chart_1_1)).set_data_options(cx, config.chart_type, chart_data, options),
+            (0, 0) => self.ui.chart_cell(ids!(chart_0_0)).set_combo_data_options(cx, chart_data, options, chart_types),
             _ => {}
         }
     }
@@ -674,14 +848,12 @@ impl App {
                 .data_table(ids!(column_config_table))
                 .set_column_names(cx, table.columns.clone());
 
-            // Add an initial row
-            self.ui.data_table(ids!(column_config_table)).add_row(cx);
-        }
-
-        // Set initial position in dropdowns
-        if let Some(_pos) = self.config_target_position {
-            self.ui.drop_down(ids!(row_dropdown)).set_selected_item(cx, 1);
-            self.ui.drop_down(ids!(column_dropdown)).set_selected_item(cx, 1);
+            // Add two default rows (one for X-axis, one for Y-axis)
+            // First row for X-axis (index 0), chart_type 0 = Bar
+            self.ui.data_table(ids!(column_config_table)).add_row_with_data(cx, 0, "X-axis".to_string(), 0);
+            // Second row for Y-axis (index 1 if available, otherwise 0), chart_type 0 = Bar
+            let y_index = if table.columns.len() > 1 { 1 } else { 0 };
+            self.ui.data_table(ids!(column_config_table)).add_row_with_data(cx, y_index, "Y-axis".to_string(), 0);
         }
 
         self.ui.label(ids!(config_status)).set_text(cx, "");
@@ -700,14 +872,24 @@ impl App {
             return;
         }
 
-        // First row is X-axis, remaining rows are Y-axis columns
+        // First row is X-axis, remaining rows are Y-axis columns with their chart types
         let x_column = column_names.get(rows[0].column_index)
             .cloned()
             .unwrap_or_default();
 
-        let y_columns: Vec<String> = rows.iter()
+        // Create YColumnConfig for each Y-axis row (skip the first row which is X-axis)
+        let y_columns: Vec<YColumnConfig> = rows.iter()
             .skip(1)
-            .filter_map(|row| column_names.get(row.column_index).cloned())
+            .filter_map(|row| {
+                let column_name = column_names.get(row.column_index)?.clone();
+                let chart_type = match row.chart_type {
+                    0 => ChartType::Bar,
+                    1 => ChartType::Line,
+                    _ => ChartType::Bar,
+                };
+                let color = Some([row.color.x, row.color.y, row.color.z, row.color.w]);
+                Some(YColumnConfig::new(column_name, row.body.clone(), chart_type, color))
+            })
             .collect();
 
         if y_columns.is_empty() {
@@ -726,7 +908,6 @@ impl App {
             );
 
             let chart = ChartConfig::new(
-                self.selected_chart_type,
                 table.name.clone(),
                 x_column,
                 y_columns,
@@ -764,6 +945,64 @@ impl App {
             }
         }
     }
+
+    fn close_drawer(&mut self, cx: &mut Cx) {
+        self.drawer_selected_chart = None;
+        self.ui.view(ids!(chart_drawer)).set_visible(cx, false);
+        self.ui.redraw(cx);
+    }
+
+    fn swap_charts(&mut self, cx: &mut Cx, idx1: usize, idx2: usize) {
+        if let Some(dashboard) = &mut self.current_dashboard {
+            let pos1 = GridPosition { row: idx1 / 2, col: idx1 % 2 };
+            let pos2 = GridPosition { row: idx2 / 2, col: idx2 % 2 };
+
+            // Find charts at these positions
+            let chart1 = dashboard.charts.iter().position(|c|
+                c.position.row == pos1.row && c.position.col == pos1.col
+            );
+            let chart2 = dashboard.charts.iter().position(|c|
+                c.position.row == pos2.row && c.position.col == pos2.col
+            );
+
+            // Swap positions
+            match (chart1, chart2) {
+                (Some(i1), Some(i2)) => {
+                    // Both positions have charts, swap their positions
+                    dashboard.charts[i1].position = pos2;
+                    dashboard.charts[i2].position = pos1;
+                }
+                (Some(i1), None) => {
+                    // Only first position has a chart, move it to second
+                    dashboard.charts[i1].position = pos2;
+                }
+                (None, Some(i2)) => {
+                    // Only second position has a chart, move it to first
+                    dashboard.charts[i2].position = pos1;
+                }
+                (None, None) => {
+                    // Neither position has a chart, nothing to do
+                }
+            }
+
+            self.render_dashboard(cx);
+        }
+    }
+
+    fn delete_chart(&mut self, cx: &mut Cx, idx: usize) {
+        if let Some(dashboard) = &mut self.current_dashboard {
+            let pos = GridPosition { row: idx / 2, col: idx % 2 };
+            let before_count = dashboard.charts.len();
+            dashboard.charts.retain(|c|
+                !(c.position.row == pos.row && c.position.col == pos.col)
+            );
+            let after_count = dashboard.charts.len();
+            println!("delete_chart: idx={}, pos=({},{}), before={}, after={}", idx, pos.row, pos.col, before_count, after_count);
+            self.render_dashboard(cx);
+        } else {
+            println!("delete_chart: current_dashboard is None");
+        }
+    }
 }
 
 impl Default for App {
@@ -776,7 +1015,7 @@ impl Default for App {
             current_dashboard: None,
             current_dashboard_index: None,
             config_target_position: None,
-            selected_chart_type: ChartType::Bar,
+            drawer_selected_chart: None,
         }
     }
 }

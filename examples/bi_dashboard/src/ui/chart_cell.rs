@@ -2,7 +2,6 @@ use makepad_widgets::*;
 use makepad_charts::*;
 use makepad_charts::chart::ComboChartWidgetRefExt;
 use makepad_charts::chart::combo_chart::DatasetType;
-use crate::config::ChartType;
 
 live_design! {
     use link::theme::*;
@@ -27,13 +26,40 @@ live_design! {
 
         empty_label = <Label> {
             visible: true
-            text: "Click 'Add Chart' to add a chart here"
+            text: ""
             draw_text: {
                 text_style: {font_size: 14.0},
                 color: #888
             }
         }
+
+        // Settings button in top-right corner for opening drawer
+        settings_btn = <Button> {
+            width: 32, height: 32
+            margin: { top: 8, right: 8 }
+            align: { x: 1.0, y: 0.0 }
+            text: "⚙"
+            draw_text: {
+                text_style: { font_size: 16.0 }
+                color: #888
+            }
+            draw_bg: {
+                fn pixel(self) -> vec4 {
+                    let sdf = Sdf2d::viewport(self.pos * self.rect_size);
+                    let sz = self.rect_size;
+                    sdf.box(0.0, 0.0, sz.x, sz.y, 4.0);
+                    sdf.fill(mix(#333, #444, self.hover));
+                    return sdf.result;
+                }
+            }
+        }
     }
+}
+
+#[derive(Clone, Debug, DefaultNone)]
+pub enum ChartCellAction {
+    SettingsClicked,
+    None,
 }
 
 #[derive(Live, LiveHook, Widget)]
@@ -45,6 +71,7 @@ pub struct ChartCell {
 impl Widget for ChartCell {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
+        self.widget_match_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
@@ -52,26 +79,33 @@ impl Widget for ChartCell {
     }
 }
 
+impl WidgetMatchEvent for ChartCell {
+    fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions, scope: &mut Scope) {
+        // Check if settings button was clicked
+        if self.view.button(ids!(settings_btn)).clicked(actions) {
+            cx.widget_action(
+                self.widget_uid(),
+                &scope.path,
+                ChartCellAction::SettingsClicked,
+            );
+        }
+    }
+}
+
 impl ChartCellRef {
-    /// Set chart data and options based on chart type
-    pub fn set_data_options(&self, cx: &mut Cx, chart_type: ChartType, data: ChartData, options: ChartOptions) {
+    /// Set chart data and options with per-column chart types for combo charts
+    pub fn set_combo_data_options(&self, cx: &mut Cx, data: ChartData, options: ChartOptions, chart_types: Vec<DatasetType>) {
+        for t in data.datasets.iter() {
+            println!("t.background_color {:?}", t.background_color);
+        }
         // Hide combo chart and empty label first
         self.combo_chart(ids!(combo_chart)).set_visible(cx, false);
         self.label(ids!(empty_label)).set_visible(cx, false);
-
-        // Convert ChartType to DatasetType
-        let dataset_type = match chart_type {
-            ChartType::Bar => DatasetType::Bar,
-            ChartType::Line => DatasetType::Line,
-        };
-
-        // Set dataset types for all datasets in the data
-        let dataset_types = vec![dataset_type; data.datasets.len()];
-
         // Configure and show combo chart
         self.combo_chart(ids!(combo_chart)).set_data(data);
         self.combo_chart(ids!(combo_chart)).set_options(options);
-        self.combo_chart(ids!(combo_chart)).set_dataset_types(dataset_types);
+        self.combo_chart(ids!(combo_chart)).set_dataset_types(chart_types);
+        self.combo_chart(ids!(combo_chart)).update_title(cx);
         self.combo_chart(ids!(combo_chart)).set_visible(cx, true);
     }
 
@@ -82,5 +116,20 @@ impl ChartCellRef {
 
         // Show empty label
         self.label(ids!(empty_label)).set_visible(cx, true);
+
+        // Trigger redraw
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.redraw(cx);
+        }
+    }
+
+    /// Check if this chart cell's settings button was clicked
+    pub fn settings_clicked(&self, actions: &Actions) -> bool {
+        if let Some(item) = actions.find_widget_action(self.widget_uid()) {
+            if let ChartCellAction::SettingsClicked = item.cast() {
+                return true;
+            }
+        }
+        false
     }
 }

@@ -4,6 +4,8 @@ use crate::coord::*;
 use crate::scale::*;
 use crate::element::*;
 use crate::animation::*;
+use crate::component::tooltip::{ChartCalloutTooltip, ChartTooltipOptions};
+use crate::component::legend::{ChartLegend, LegendItemData};
 
 live_design! {
     use link::theme::*;
@@ -14,10 +16,77 @@ live_design! {
     use crate::element::line::DrawChartLine;
     use crate::element::point::DrawPoint;
     use crate::element::grid::DrawGridLine;
+    use crate::component::tooltip::ChartCalloutTooltip;
+    use crate::component::legend::ChartLegend;
 
     pub ComboChart = {{ComboChart}} {
         width: Fill,
-        height: Fill,
+        height: 500,
+        flow: Down,
+
+        draw_label: {
+            text_style: <THEME_FONT_REGULAR> { font_size: 10.0 }
+            color: #999999
+        }
+
+        // Chart title at top, center aligned
+        chart_title = <Label> {
+            width: Fill,
+            height: Fit,
+            align: { x: 0.5 }
+            padding: { top: 10, bottom: 5 }
+            draw_text: {
+                text_style: { font_size: 16.0 },
+                color: #e0e0e0
+            }
+            text: ""
+        }
+
+        // Main chart area with Y-axis label on the right
+        chart_with_y_label = <View> {
+            width: Fill,
+            height: Fill,
+            flow: Right,
+
+            chart_area = <View> {
+                width: Fill,
+                height: Fill,
+            }
+
+            // Y-axis label (rotated, right of chart)
+            y_axis_label = <Label> {
+                width: Fit,
+                height: Fill,
+                align: { x: 0.5, y: 0.5 }
+                padding: { left: 5, right: 10 }
+                draw_text: {
+                    text_style: { font_size: 12.0 },
+                    color: #a0a0a0
+                }
+                text: ""
+            }
+        }
+
+        // X-axis label (below chart)
+        x_axis_label = <Label> {
+            width: Fill,
+            height: Fit,
+            align: { x: 0.5 }
+            padding: { top: 5, bottom: 5 }
+            draw_text: {
+                text_style: { font_size: 12.0 },
+                color: #a0a0a0
+            }
+            text: ""
+        }
+
+        chart_legend = <ChartLegend> {
+            width: Fill,
+            height: Fit,
+            align: { x: 0.5 }
+        }
+
+        chart_tooltip = <ChartCalloutTooltip> {}
     }
 }
 
@@ -36,6 +105,12 @@ pub struct ComboChart {
     view: View,
 
     #[live]
+    chart_tooltip: ChartCalloutTooltip,
+
+    #[live]
+    chart_legend: ChartLegend,
+
+    #[live]
     draw_bar: DrawBar,
 
     #[live]
@@ -46,6 +121,9 @@ pub struct ComboChart {
 
     #[live]
     draw_grid: DrawGridLine,
+
+    #[live]
+    draw_label: DrawText,
 
     #[rust]
     data: ChartData,
@@ -74,13 +152,41 @@ pub struct ComboChart {
     /// Enable gradient for bars (vertical gradient)
     #[rust(false)]
     gradient_enabled: bool,
+
+    /// Hovered bar index (-1 for none)
+    #[rust(-1)]
+    hovered_bar: i32,
+
+    /// Hovered dataset index for bars (-1 for none)
+    #[rust(-1)]
+    hovered_bar_dataset: i32,
+
+    /// Hovered point index for lines (-1 for none)
+    #[rust(-1)]
+    hovered_point: i32,
+
+    /// Hovered dataset index for points (-1 for none)
+    #[rust(-1)]
+    hovered_point_dataset: i32,
+
+    /// Current tooltip target rect (the bar or point being hovered)
+    #[rust]
+    tooltip_target_rect: Rect,
+
+    /// Current tooltip text
+    #[rust]
+    tooltip_text: String,
 }
 
 impl Widget for ComboChart {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
+        self.chart_tooltip.handle_event(cx, event, scope);
 
         match event {
+            Event::MouseMove(e) => {
+                self.handle_mouse_move(cx, e.abs);
+            }
             Event::NextFrame(_) => {
                 if self.animator.is_running() {
                     let time = cx.seconds_since_app_start();
@@ -102,10 +208,11 @@ impl Widget for ComboChart {
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         self.view.draw_walk_all(cx, scope, walk);
 
-        let rect = cx.turtle().rect();
+        // Get the chart_area rect for drawing chart elements (now nested inside chart_with_y_label)
+        let chart_area_rect = self.view.view(ids!(chart_with_y_label)).view(ids!(chart_area)).area().rect(cx);
 
-        if rect.size.x > 0.0 && rect.size.y > 0.0 {
-            self.update_coord(rect);
+        if chart_area_rect.size.x > 0.0 && chart_area_rect.size.y > 0.0 {
+            self.update_coord(chart_area_rect);
 
             if !self.initialized {
                 self.start_animation(cx);
@@ -118,6 +225,12 @@ impl Widget for ComboChart {
             self.draw_lines(cx);
         }
 
+        // Draw legend
+        let _ = self.chart_legend.draw_walk(cx, scope, Walk::default());
+
+        // Draw tooltip (uses overlay layer)
+        let _ = self.chart_tooltip.draw_walk(cx, scope, Walk::default());
+
         DrawStep::done()
     }
 }
@@ -127,6 +240,18 @@ impl ComboChart {
         self.data = data;
         self.initialized = false;
         self.setup_coord_from_data();
+        self.update_legend();
+    }
+
+    fn update_legend(&mut self) {
+        let items: Vec<LegendItemData> = self.data.datasets.iter().enumerate().map(|(i, dataset)| {
+            LegendItemData {
+                label: dataset.label.clone(),
+                color: dataset.background_color.unwrap_or_else(|| get_color(i)),
+                hidden: false,
+            }
+        }).collect();
+        self.chart_legend.set_items(items);
     }
 
     pub fn set_options(&mut self, options: ChartOptions) {
@@ -135,6 +260,43 @@ impl ComboChart {
         if !self.data.datasets.is_empty() {
             self.setup_coord_from_data();
         }
+    }
+
+    /// Update the title label from options
+    pub fn update_title(&mut self, cx: &mut Cx) {
+        let title = &self.options.title.text;
+        self.view.label(ids!(chart_title)).set_text(cx, title);
+    }
+
+    /// Update the axis labels from options
+    pub fn update_axis_labels(&mut self, cx: &mut Cx) {
+        // Update X-axis label
+        if self.options.scales.x.title.display {
+            self.view.label(ids!(x_axis_label)).set_text(cx, &self.options.scales.x.title.text);
+        } else {
+            self.view.label(ids!(x_axis_label)).set_text(cx, "");
+        }
+
+        // Update Y-axis label
+        if self.options.scales.y.title.display {
+            self.view.view(ids!(chart_with_y_label)).label(ids!(y_axis_label)).set_text(cx, &self.options.scales.y.title.text);
+        } else {
+            self.view.view(ids!(chart_with_y_label)).label(ids!(y_axis_label)).set_text(cx, "");
+        }
+    }
+
+    /// Set the X-axis label text
+    pub fn set_x_axis_label(&mut self, cx: &mut Cx, text: &str) {
+        self.options.scales.x.title.display = !text.is_empty();
+        self.options.scales.x.title.text = text.to_string();
+        self.view.label(ids!(x_axis_label)).set_text(cx, text);
+    }
+
+    /// Set the Y-axis label text
+    pub fn set_y_axis_label(&mut self, cx: &mut Cx, text: &str) {
+        self.options.scales.y.title.display = !text.is_empty();
+        self.options.scales.y.title.text = text.to_string();
+        self.view.view(ids!(chart_with_y_label)).label(ids!(y_axis_label)).set_text(cx, text);
     }
 
     /// Set the type for each dataset (Bar or Line)
@@ -235,6 +397,43 @@ impl ComboChart {
 
         // Y axis at the left
         self.draw_grid.draw_line(cx, dvec2(area.left, area.bottom), dvec2(area.left, area.top), axis_width);
+
+        // Draw X-axis tick labels
+        self.draw_x_tick_labels(cx);
+
+        // Draw Y-axis tick labels
+        self.draw_y_tick_labels(cx);
+    }
+
+    fn draw_x_tick_labels(&mut self, cx: &mut Cx2d) {
+        let area = self.coord.chart_area();
+
+        // Draw labels for each data point using the original data labels
+        for (i, label) in self.data.labels.iter().enumerate() {
+            let x_pixel = self.coord.x_scale().get_pixel_for_value(i as f64);
+            let y_pixel = area.bottom + 8.0; // 8 pixels below the axis
+
+            // Draw the label below the tick position
+            // Estimate text width for centering (roughly 6 pixels per character)
+            let offset = (label.len() as f64 * 3.0).min(40.0);
+            self.draw_label.draw_abs(cx, dvec2(x_pixel - offset, y_pixel), label);
+        }
+    }
+
+    fn draw_y_tick_labels(&mut self, cx: &mut Cx2d) {
+        let tick_options = TickOptions::default();
+        let y_ticks = self.coord.build_y_ticks(&tick_options);
+        let area = self.coord.chart_area();
+
+        for tick in &y_ticks {
+            let y_pixel = self.coord.y_scale().get_pixel_for_value(tick.value);
+
+            // Draw the label to the left of the axis
+            // Estimate text width for right-alignment
+            let label_width = (tick.label.len() as f64 * 6.0).min(45.0);
+            let x_pixel = area.left - label_width - 5.0;
+            self.draw_label.draw_abs(cx, dvec2(x_pixel, y_pixel - 5.0), &tick.label);
+        }
     }
 
     fn draw_bars(&mut self, cx: &mut Cx2d) {
@@ -255,16 +454,7 @@ impl ComboChart {
 
         for (bar_idx, &dataset_idx) in bar_datasets.iter().enumerate() {
             let dataset = &self.data.datasets[dataset_idx];
-            let color = dataset.background_color.unwrap_or_else(|| get_color(dataset_idx));
-            self.draw_bar.color = color;
-
-            // Apply gradient if enabled
-            if self.gradient_enabled {
-                let lighter = lighten(color, 0.3);
-                self.draw_bar.set_vertical_gradient(color, lighter);
-            } else {
-                self.draw_bar.disable_gradient();
-            }
+            let base_color = dataset.background_color.unwrap_or_else(|| get_color(dataset_idx));
 
             for (data_idx, point) in dataset.data.iter().enumerate() {
                 let x_center = self.coord.x_scale().get_pixel_for_value(data_idx as f64);
@@ -280,9 +470,33 @@ impl ComboChart {
 
                 let y_value = point.y * progress;
                 let y_pixel = self.coord.y_scale().get_pixel_for_value(y_value);
-                let base_y = self.coord.y_scale().get_pixel_for_value(0.0);
+                // Clamp base_y to the chart area bottom so bars don't exceed the x-axis
+                let base_y = self.coord.y_scale().get_pixel_for_value(0.0)
+                    .min(self.coord.chart_area().bottom);
 
                 let bar_height = base_y - y_pixel;
+
+                // Check if this bar is hovered
+                let is_hovered = self.hovered_bar >= 0 &&
+                    self.hovered_bar as usize == data_idx &&
+                    self.hovered_bar_dataset >= 0 &&
+                    self.hovered_bar_dataset as usize == dataset_idx;
+
+                let color = if is_hovered {
+                    lighten(base_color, 0.15)
+                } else {
+                    base_color
+                };
+
+                self.draw_bar.color = color;
+
+                // Apply gradient if enabled
+                if self.gradient_enabled {
+                    let lighter = lighten(color, 0.3);
+                    self.draw_bar.set_vertical_gradient(color, lighter);
+                } else {
+                    self.draw_bar.disable_gradient();
+                }
 
                 if bar_height > 0.0 {
                     let bar_rect = Rect {
@@ -325,15 +539,181 @@ impl ComboChart {
                 self.draw_line.draw_line(cx, points[i], points[i + 1], line_width);
             }
 
-            // Draw points
+            // Draw points with hover effect
             self.draw_point.color = color;
-            for point in &points {
+            for (data_idx, point) in points.iter().enumerate() {
+                // Check if this point is hovered
+                let is_hovered = self.hovered_point >= 0 &&
+                    self.hovered_point as usize == data_idx &&
+                    self.hovered_point_dataset >= 0 &&
+                    self.hovered_point_dataset as usize == dataset_idx;
+
+                let radius = if is_hovered {
+                    self.point_radius * 1.5
+                } else {
+                    self.point_radius
+                };
+
                 let rect = Rect {
-                    pos: dvec2(point.x - self.point_radius, point.y - self.point_radius),
-                    size: dvec2(self.point_radius * 2.0, self.point_radius * 2.0),
+                    pos: dvec2(point.x - radius, point.y - radius),
+                    size: dvec2(radius * 2.0, radius * 2.0),
                 };
                 self.draw_point.draw_point(cx, rect);
             }
+        }
+    }
+
+    fn show_tooltip(&mut self, cx: &mut Cx, target_rect: Rect, text: &str) {
+        self.chart_tooltip.show(cx, text, target_rect, ChartTooltipOptions { position: crate::TooltipPosition::Top, bg_color: Vec4f { x: 0.8, y: 0.8, z: 0.8, w: 1.0 },..Default::default() });
+    }
+
+    fn hide_tooltip(&mut self, cx: &mut Cx) {
+        self.chart_tooltip.hide(cx);
+    }
+
+    fn handle_mouse_move(&mut self, cx: &mut Cx, pos: DVec2) {
+        let old_hovered_bar = self.hovered_bar;
+        let old_hovered_bar_dataset = self.hovered_bar_dataset;
+        let old_hovered_point = self.hovered_point;
+        let old_hovered_point_dataset = self.hovered_point_dataset;
+
+        // Reset hover states
+        self.hovered_bar = -1;
+        self.hovered_bar_dataset = -1;
+        self.hovered_point = -1;
+        self.hovered_point_dataset = -1;
+
+        if !self.coord.contains_pixel(pos.x, pos.y) {
+            // Hide tooltip when outside chart area
+            self.hide_tooltip(cx);
+            if old_hovered_bar != self.hovered_bar ||
+               old_hovered_bar_dataset != self.hovered_bar_dataset ||
+               old_hovered_point != self.hovered_point ||
+               old_hovered_point_dataset != self.hovered_point_dataset {
+                self.redraw(cx);
+            }
+            return;
+        }
+
+        let bar_width = self.coord.get_bar_width(self.bar_percent);
+
+        // Count bar datasets
+        let bar_datasets: Vec<usize> = (0..self.data.datasets.len())
+            .filter(|&i| self.get_dataset_type(i) == DatasetType::Bar)
+            .collect();
+
+        let num_bar_datasets = bar_datasets.len();
+        let group_bar_width = if num_bar_datasets > 0 {
+            bar_width / num_bar_datasets as f64
+        } else {
+            bar_width
+        };
+
+        // Check bars for hover
+        for (bar_idx, &dataset_idx) in bar_datasets.iter().enumerate() {
+            let dataset = &self.data.datasets[dataset_idx];
+
+            for (data_idx, point) in dataset.data.iter().enumerate() {
+                let x_center = self.coord.x_scale().get_pixel_for_value(data_idx as f64);
+
+                let group_offset = if num_bar_datasets > 1 {
+                    let start_offset = -bar_width / 2.0 + group_bar_width / 2.0;
+                    start_offset + bar_idx as f64 * group_bar_width
+                } else {
+                    0.0
+                };
+
+                let bar_x = x_center + group_offset - group_bar_width / 2.0;
+                let y_pixel = self.coord.y_scale().get_pixel_for_value(point.y);
+                // Clamp base_y to the chart area bottom
+                let base_y = self.coord.y_scale().get_pixel_for_value(0.0)
+                    .min(self.coord.chart_area().bottom);
+
+                let bar_top = y_pixel.min(base_y);
+                let bar_bottom = y_pixel.max(base_y);
+
+                // Check if mouse is within bar bounds
+                if pos.x >= bar_x && pos.x <= bar_x + group_bar_width &&
+                   pos.y >= bar_top && pos.y <= bar_bottom {
+                    self.hovered_bar = data_idx as i32;
+                    self.hovered_bar_dataset = dataset_idx as i32;
+
+                    // Set tooltip target rect (top of bar)
+                    self.tooltip_target_rect = Rect {
+                        pos: dvec2(bar_x, bar_top),
+                        size: dvec2(group_bar_width, 1.0),
+                    };
+
+                    // Build tooltip text
+                    let label = self.data.labels.get(data_idx)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Index {}", data_idx));
+                    let dataset_name = if dataset.label.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{}\n", dataset.label)
+                    };
+                    self.tooltip_text = format!("{}{}: {:.2}", dataset_name, label, point.y);
+                }
+            }
+        }
+
+        // Check line points for hover (find nearest within threshold)
+        let mut min_dist = f64::MAX;
+        let hover_threshold = 20.0;
+
+        for (dataset_idx, dataset) in self.data.datasets.iter().enumerate() {
+            if self.get_dataset_type(dataset_idx) != DatasetType::Line {
+                continue;
+            }
+
+            for (data_idx, point) in dataset.data.iter().enumerate() {
+                let px = self.coord.x_scale().get_pixel_for_value(data_idx as f64);
+                let py = self.coord.y_scale().get_pixel_for_value(point.y);
+
+                let dx = pos.x - px;
+                let dy = pos.y - py;
+                let dist = (dx * dx + dy * dy).sqrt();
+
+                if dist < min_dist && dist < hover_threshold {
+                    min_dist = dist;
+                    self.hovered_point = data_idx as i32;
+                    self.hovered_point_dataset = dataset_idx as i32;
+
+                    // Set tooltip target rect (centered on point)
+                    self.tooltip_target_rect = Rect {
+                        pos: dvec2(px - self.point_radius, py - self.point_radius),
+                        size: dvec2(self.point_radius * 2.0, self.point_radius * 2.0),
+                    };
+
+                    // Build tooltip text
+                    let label = self.data.labels.get(data_idx)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Index {}", data_idx));
+                    let dataset_name = if dataset.label.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{}\n", dataset.label)
+                    };
+                    self.tooltip_text = format!("{}{}: {:.2}", dataset_name, label, point.y);
+                }
+            }
+        }
+
+        // Show/hide tooltip based on hover state
+        let has_hover = self.hovered_bar >= 0 || self.hovered_point >= 0;
+        if has_hover {
+            self.show_tooltip(cx, self.tooltip_target_rect, &self.tooltip_text.clone());
+        } else {
+            self.hide_tooltip(cx);
+        }
+
+        // Redraw if hover state changed
+        if old_hovered_bar != self.hovered_bar ||
+           old_hovered_bar_dataset != self.hovered_bar_dataset ||
+           old_hovered_point != self.hovered_point ||
+           old_hovered_point_dataset != self.hovered_point_dataset {
+            self.redraw(cx);
         }
     }
 }
@@ -348,6 +728,30 @@ impl ComboChartRef {
     pub fn set_options(&self, options: ChartOptions) {
         if let Some(mut inner) = self.borrow_mut() {
             inner.set_options(options);
+        }
+    }
+
+    pub fn update_title(&self, cx: &mut Cx) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.update_title(cx);
+        }
+    }
+
+    pub fn update_axis_labels(&self, cx: &mut Cx) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.update_axis_labels(cx);
+        }
+    }
+
+    pub fn set_x_axis_label(&self, cx: &mut Cx, text: &str) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.set_x_axis_label(cx, text);
+        }
+    }
+
+    pub fn set_y_axis_label(&self, cx: &mut Cx, text: &str) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.set_y_axis_label(cx, text);
         }
     }
 

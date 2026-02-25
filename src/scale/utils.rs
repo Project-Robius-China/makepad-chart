@@ -26,7 +26,9 @@ pub fn nice_step(span: f64, max_ticks: usize) -> f64 {
 
 /// Calculate nice bounds for a range
 ///
-/// Expands the range to nice round numbers suitable for axis bounds
+/// Expands the range to nice round numbers suitable for axis bounds.
+/// Uses the same step calculation as tick generation to ensure bounds
+/// align with tick marks and don't overshoot excessively.
 pub fn nice_bounds(min: f64, max: f64) -> (f64, f64) {
     let span = max - min;
 
@@ -34,9 +36,12 @@ pub fn nice_bounds(min: f64, max: f64) -> (f64, f64) {
         return (min - 1.0, max + 1.0);
     }
 
-    let magnitude = 10f64.powf(span.log10().floor());
-    let nice_min = (min / magnitude).floor() * magnitude;
-    let nice_max = (max / magnitude).ceil() * magnitude;
+    // Use the nice step calculation to determine bounds
+    // This ensures bounds align with tick marks and reduces overshoot
+    let step = nice_step(span, 10);
+
+    let nice_min = (min / step).floor() * step;
+    let nice_max = (max / step).ceil() * step;
 
     (nice_min, nice_max)
 }

@@ -2,7 +2,7 @@ use makepad_widgets::*;
 use makepad_charts::*;
 use makepad_charts::chart::ComboChartWidgetRefExt;
 use makepad_charts::chart::combo_chart::DatasetType;
-use crate::config::ChartType;
+pub type ChartDataGroup = (ChartData, ChartOptions, Vec<DatasetType>);
 
 live_design! {
     use link::theme::*;
@@ -27,7 +27,7 @@ live_design! {
 
         empty_label = <Label> {
             visible: true
-            text: "Click 'Add Chart' to add a chart here"
+            text: ""
             draw_text: {
                 text_style: {font_size: 14.0},
                 color: #888
@@ -53,34 +53,16 @@ impl Widget for ChartCell {
 }
 
 impl ChartCellRef {
-    /// Set chart data and options based on chart type
-    pub fn set_data_options(&self, cx: &mut Cx, chart_type: ChartType, data: ChartData, options: ChartOptions) {
+    /// Set chart data and options with per-column chart types for combo charts
+    pub fn set_combo_data_options(&self, cx: &mut Cx, data: ChartData, options: ChartOptions, chart_types: Vec<DatasetType>) {
         // Hide combo chart and empty label first
         self.combo_chart(ids!(combo_chart)).set_visible(cx, false);
         self.label(ids!(empty_label)).set_visible(cx, false);
-
-        // Convert ChartType to DatasetType
-        let dataset_type = match chart_type {
-            ChartType::Bar => DatasetType::Bar,
-            ChartType::Line => DatasetType::Line,
-        };
-
-        // Set dataset types for all datasets in the data
-        let dataset_types = vec![dataset_type; data.datasets.len()];
-
         // Configure and show combo chart
         self.combo_chart(ids!(combo_chart)).set_data(data);
         self.combo_chart(ids!(combo_chart)).set_options(options);
-        self.combo_chart(ids!(combo_chart)).set_dataset_types(dataset_types);
+        self.combo_chart(ids!(combo_chart)).set_dataset_types(chart_types);
+        self.combo_chart(ids!(combo_chart)).update_title(cx);
         self.combo_chart(ids!(combo_chart)).set_visible(cx, true);
-    }
-
-    /// Show empty state
-    pub fn show_empty(&self, cx: &mut Cx) {
-        // Hide combo chart
-        self.combo_chart(ids!(combo_chart)).set_visible(cx, false);
-
-        // Show empty label
-        self.label(ids!(empty_label)).set_visible(cx, true);
     }
 }

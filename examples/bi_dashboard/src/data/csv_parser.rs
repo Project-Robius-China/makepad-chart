@@ -5,7 +5,6 @@ use std::path::Path;
 /// Parse a CSV file and return a DataTable
 pub fn parse_csv(path: &str) -> Result<DataTable, String> {
     // Verify file exists
-    println!("Parsing CSV: {}", path);
     if !Path::new(path).exists() {
         return Err(format!("File not found: {}", path));
     }
@@ -30,7 +29,7 @@ pub fn parse_csv(path: &str) -> Result<DataTable, String> {
 
         let row = record
             .iter()
-            .map(|field| parse_value(field))
+            .map(parse_value)
             .collect::<Vec<_>>();
 
         // Verify row length matches header count

@@ -24,13 +24,45 @@ live_design! {
         }
     }
 
+    LegendItem = <View> {
+        width: Fit,
+        height: Fit,
+        flow: Right,
+        spacing: 6,
+        align: { y: 0.5 }
+
+        color_box = <View> {
+            width: 12, height: 12
+            show_bg: true
+            draw_bg: {
+                instance color: #ff0000
+                fn pixel(self) -> vec4 {
+                    let sdf = Sdf2d::viewport(self.pos * self.rect_size);
+                    sdf.box(0.0, 0.0, self.rect_size.x, self.rect_size.y, 2.0);
+                    sdf.fill(self.color);
+                    return sdf.result;
+                }
+            }
+        }
+
+        label = <Label> {
+            width: Fit, height: Fit
+            draw_text: {
+                text_style: { font_size: 11.0 },
+                color: #a0a0a0
+            }
+        }
+    }
+
     pub ChartLegend = {{ChartLegend}} {
-        width: Fill,
+        width: Fit,
         height: Fit,
         flow: Right,
         spacing: 16,
         padding: {top: 8, bottom: 8},
         align: {x: 0.5, y: 0.5},
+
+        legend_item = <LegendItem> {}
     }
 }
 
@@ -72,7 +104,8 @@ impl Widget for ChartLegend {
         self.view.handle_event(cx, event, scope);
     }
 
-    fn draw_walk(&mut self, cx: &mut Cx2d, _scope: &mut Scope, walk: Walk) -> DrawStep {
+    fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
+        // Use flow layout for items
         cx.begin_turtle(walk, Layout {
             flow: Flow::right(),
             spacing: 16.0,
@@ -81,31 +114,21 @@ impl Widget for ChartLegend {
             ..Default::default()
         });
 
-        let box_size = 12.0;
-        let spacing = 6.0;
+        // Draw each legend item using the template
+        for item in &self.items {
+            // Create the legend item from template
+            let legend_item = self.view.view(ids!(legend_item));
 
-        // Clone items to avoid borrow conflict
-        let items_clone: Vec<_> = self.items.clone();
+            // Set the color on the color box
+            legend_item.view(ids!(color_box)).apply_over(cx, live! {
+                draw_bg: { color: (item.color) }
+            });
 
-        for item in &items_clone {
-            // Get current position
-            let pos = cx.turtle().pos();
+            // Set the label text
+            legend_item.label(ids!(label)).set_text(cx, &item.label);
 
-            // Draw colored box
-            self.draw_box.color = item.color;
-            let box_rect = Rect {
-                pos: dvec2(pos.x, pos.y + 2.0),
-                size: dvec2(box_size, box_size),
-            };
-            self.draw_box.draw_box(cx, box_rect);
-
-            // Move turtle past the box and label
-            // Estimate label width (rough approximation)
-            let label_width = item.label.len() as f64 * 7.0;
-            cx.turtle_mut().move_to(dvec2(
-                pos.x + box_size + spacing + label_width + 16.0,
-                pos.y,
-            ));
+            // Draw the legend item
+            let _ = legend_item.draw_walk(cx, scope, Walk::fit());
         }
 
         cx.end_turtle();

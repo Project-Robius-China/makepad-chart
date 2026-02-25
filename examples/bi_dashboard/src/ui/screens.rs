@@ -1,9 +1,12 @@
+use crate::config::ChartConfig;
+
 /// Screen navigation state
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum AppScreen {
     #[default]
     Home,
-    Dashboard,
+    DashboardInit,
+    DashboardUpdate,
     Import,
-    ChartConfig,
+    ChartConfig(Option<ChartConfig>),
 }

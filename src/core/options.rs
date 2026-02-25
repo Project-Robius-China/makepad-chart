@@ -106,6 +106,20 @@ impl ChartOptions {
         self.scales.y.begin_at_zero = begin_at_zero;
         self
     }
+
+    /// Set X-axis label text
+    pub fn with_x_axis_label(mut self, text: impl Into<String>) -> Self {
+        self.scales.x.title.display = true;
+        self.scales.x.title.text = text.into();
+        self
+    }
+
+    /// Set Y-axis label text
+    pub fn with_y_axis_label(mut self, text: impl Into<String>) -> Self {
+        self.scales.y.title.display = true;
+        self.scales.y.title.text = text.into();
+        self
+    }
 }
 
 /// Title and subtitle options

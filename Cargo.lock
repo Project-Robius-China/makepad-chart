@@ -332,6 +332,7 @@ dependencies = [
 [[package]]
 name = "makepad-components"
 version = "0.1.0"
+source = "git+https://github.com/alanpoon/makepad-component?branch=flowright#22970997c183489fbc4dff720f176292639b4072"
 dependencies = [
  "makepad-shell",
  "makepad-widgets",
